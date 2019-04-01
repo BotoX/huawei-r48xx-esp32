@@ -1,0 +1,31 @@
+0x108180fe		01 00 00 00 00 00 uu uu		Voltage			a6c0 - ea67
+				01 01 00 00 00 00 uu uu		Default Voltage	c000 - e99a
+				01 03 00 00 00 00 ii ii		Current			0000 - ?
+				01 04 00 00 00 00 ii ii		Default Current	0000 - ?
+
+uu uu = 1020 x Voltage [V]
+ii ii = 30 x Current [A]
+
+======================================================================
+
+0x108140fe		00 00 00 00 00 00 00 00
+0x1081407f
+				01 70 00 00 00 xx xx xx
+				01 71 00 00 00 00 xx xx		// cb b8
+				01 72 00 00 00 00 xx xx
+				01 73 00 00 00 xx xx xx
+				  74						// 03 85  03 bf
+				01 75 00 00 00 00 uu uu		Output voltage feedback
+				01 76 00 00 00 00 ii ii		Set output current
+				  78
+				  7f
+				  80
+				  81
+				  82
+
+======================================================================
+
+0x1001117e		00 01 00 00 00 00 ii ii		Output current feedback = ii ii / 30
+
+Baud rate: 125kbps
+CAN Extended Frame Format
