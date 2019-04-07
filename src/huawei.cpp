@@ -7,34 +7,116 @@
 
 namespace Huawei {
 
-uint16_t s_UserVoltage = 0x00;
-uint16_t s_UserCurrent = 0x00;
+uint16_t g_UserVoltage = 0x00;
+uint16_t g_UserCurrent = 0x00;
+float g_Current = 0.0;
+HuaweiInfo g_PSU;
 
-void OnRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
+void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
 {
-    if(Main::g_Debug)
+    HuaweiEAddr eaddr = HuaweiEAddr::unpack(msgid);
+
+    switch(eaddr.cmdId)
     {
-        Serial.printf("%X:", msgid);
-        for(uint8_t i = 0; i < length; i++)
+        case HUAWEI_R48XX_MSG_CURRENT_ID: {
+            g_Current = __builtin_bswap16(*(uint32_t *)&data[6]) / 30.0;
+        } return;
+
+        case HUAWEI_R48XX_MSG_DATA_ID: {
+            uint16_t id = __builtin_bswap16(*(uint16_t *)&data[0]);
+            uint32_t val =  __builtin_bswap32(*(uint32_t *)&data[4]);
+            id &= ~0x3000;
+
+            switch(id)
+            {
+                case 0x0170: {
+                    g_PSU.input_power = val / 1024.0;
+                } return;
+                case 0x0171: {
+                    g_PSU.input_freq = val / 1024.0;
+                } return;
+                case 0x0172: {
+                    g_PSU.input_current = val / 1024.0;
+                } return;
+                case 0x0173: {
+                    g_PSU.output_power = val / 1024.0;
+                } return;
+                case 0x0174: {
+                    g_PSU.efficiency = val / 1024.0;
+                } return;
+                case 0x0175: {
+                    g_PSU.output_voltage = val / 1024.0;
+                } return;
+                case 0x0176: {
+                    g_PSU.output_current_max = val / 30.0;
+                } return;
+                case 0x0178: {
+                    g_PSU.input_voltage = val / 1024.0;
+                } return;
+                case 0x017F: {
+                    g_PSU.output_temp = val / 1024.0;
+                } return;
+                case 0x0180: {
+                    g_PSU.input_temp = val / 1024.0;
+                } return;
+                case 0x0181:
+                case 0x0182: {
+                    g_PSU.output_current = val / 1024.0;
+                } return;
+            }
+        } return;
+
+        case HUAWEI_R48XX_MSG_DESC_ID: {
+            if(data[1] == 1)
+                Main::channel()->println("--- HUAWEI R48XX DESCRIPTION ---");
+
+            Main::channel()->write(&data[2], 6);
+
+            if(!eaddr.count)
+                Main::channel()->println();
+        } return;
+    }
+
+    // Debug
+    for(int c = 0; c < Main::NUM_CHANNELS; c++)
+    {
+        if(Main::g_Debug[c])
         {
-            Serial.printf(" %X", data[i]);
+            Main::channel(c)->printf("%X:", msgid);
+            for(uint8_t i = 0; i < length; i++)
+            {
+                Main::channel(c)->printf(" %X", data[i]);
+            }
+            Main::channel(c)->println();
         }
-        Serial.println();
     }
 }
 
-void SendCAN(uint32_t msgid, uint8_t *data, uint8_t length)
+void every1000ms()
 {
-    CAN.beginExtendedPacket(msgid);
+    sendGetData();
+
+    static uint8_t count10 = 0;
+    if(count10 == 10)
+    {
+        if(g_UserVoltage)
+            setVoltageHex(g_UserVoltage, false);
+        if(g_UserCurrent)
+            setCurrentHex(g_UserCurrent, false);
+    }
+}
+
+void sendCAN(uint32_t msgid, uint8_t *data, uint8_t length, bool rtr)
+{
+    CAN.beginExtendedPacket(msgid, -1, rtr);
     CAN.write(data, length);
     CAN.endPacket();
 }
 
-void SetReg(uint8_t reg, uint16_t val)
+void setReg(uint8_t reg, uint16_t val)
 {
-    static const uint32_t msgid = 0x108180fe;
-    static uint8_t data[8];
-
+    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_CONTROL_ID, 0x01, 0x3F, 0x00};
+    uint8_t data[8];
     data[0] = 0x01;
     data[1] = reg;
     data[2] = 0x00;
@@ -44,10 +126,10 @@ void SetReg(uint8_t reg, uint16_t val)
     data[6] = (val >> 8) & 0xFF;
     data[7] = val & 0xFF;
 
-    SendCAN(msgid, data, sizeof(data));
+    sendCAN(eaddr.pack(), data, sizeof(data));
 }
 
-void SetVoltageHex(uint16_t hex, bool perm)
+void setVoltageHex(uint16_t hex, bool perm)
 {
     const uint8_t reg = perm ? 0x01 : 0x00;
 
@@ -62,14 +144,15 @@ void SetVoltageHex(uint16_t hex, bool perm)
             hex = 0xC000;
         if(hex > 0xE99A)
             hex = 0xE99A;
+        g_UserVoltage = 0x00;
     }
     else
-        s_UserVoltage = hex;
+        g_UserVoltage = hex;
 
-    SetReg(reg, hex);
+    setReg(reg, hex);
 }
 
-void SetVoltage(float u, bool perm)
+void setVoltage(float u, bool perm)
 {
     // calibration, non-linearity measured on my own PSU
     u += (u - 49.0) / 110.0;
@@ -80,27 +163,65 @@ void SetVoltage(float u, bool perm)
         u = 60.0;
 
     uint16_t hex = u * 1020;
-    SetVoltageHex(hex, perm);
+    setVoltageHex(hex, perm);
 }
 
-void SetCurrentHex(uint16_t hex, bool perm)
+void setCurrentHex(uint16_t hex, bool perm)
 {
     const uint8_t reg = perm ? 0x04 : 0x03;
 
     if(hex > 0x0420)
         hex = 0x0420;
 
-    if(!perm)
-        s_UserCurrent = hex;
+    if(perm)
+        g_UserCurrent = 0x00;
+    else
+        g_UserCurrent = hex;
 
-    SetReg(reg, hex);
+    setReg(reg, hex);
 }
 
-void SetCurrent(float i, bool perm)
+void setCurrent(float i, bool perm)
 {
     uint16_t hex = i * 30;
 
-    SetCurrentHex(hex, perm);
+    setCurrentHex(hex, perm);
+}
+
+void sendGetData()
+{
+    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_DATA_ID, 0x01, 0x3F, 0x00};
+    uint8_t data[8] = {0x00};
+    sendCAN(eaddr.pack(), data, sizeof(data));
+}
+
+void sendGetDescription()
+{
+    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_DESC_ID, 0x01, 0x3F, 0x00};
+    uint8_t data[8] = {0x00};
+    sendCAN(eaddr.pack(), data, sizeof(data));
+}
+
+HuaweiEAddr HuaweiEAddr::unpack(uint32_t val)
+{
+    HuaweiEAddr s;
+    s.protoId = (val>>23) & 0x3F;
+    s.addr = (val>>16) & 0x7F;
+    s.cmdId = (val>>8) & 0xFF;
+    s.fromSrc = (val>>7) & 0x01;
+    s.rev = (val>>1) & 0x3F;
+    s.count = val & 0x01;
+    return s;
+}
+
+uint32_t HuaweiEAddr::pack()
+{
+    return protoId << 23 |
+           addr << 16 |
+           cmdId << 8 |
+           fromSrc << 7 |
+           rev << 1 |
+           count;
 }
 
 }
