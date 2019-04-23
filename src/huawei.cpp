@@ -7,9 +7,11 @@
 
 namespace Huawei {
 
+bool g_Ready = false;
 uint16_t g_UserVoltage = 0x00;
 uint16_t g_UserCurrent = 0x00;
 float g_Current = 0.0;
+float g_CoulombCounter = 0.0;
 HuaweiInfo g_PSU;
 
 void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
@@ -19,7 +21,11 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
     switch(eaddr.cmdId)
     {
         case HUAWEI_R48XX_MSG_CURRENT_ID: {
-            g_Current = __builtin_bswap16(*(uint32_t *)&data[6]) / 30.0;
+            if(!data[3])
+                g_Ready = true;
+            g_Current = __builtin_bswap16(*(uint16_t *)&data[6]) / 30.0;
+            if(!eaddr.fromSrc)
+                g_CoulombCounter += g_Current * 0.377; // every 377ms
         } return;
 
         case HUAWEI_R48XX_MSG_DATA_ID: {
@@ -94,8 +100,9 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
 
 void every1000ms()
 {
-    sendGetData();
-
+    if(g_Ready)
+        sendGetData();
+/*
     static uint8_t count10 = 0;
     if(count10 == 10)
     {
@@ -104,6 +111,8 @@ void every1000ms()
         if(g_UserCurrent)
             setCurrentHex(g_UserCurrent, false);
     }
+    count10++;
+*/
 }
 
 void sendCAN(uint32_t msgid, uint8_t *data, uint8_t length, bool rtr)
@@ -131,7 +140,7 @@ void setReg(uint8_t reg, uint16_t val)
 
 void setVoltageHex(uint16_t hex, bool perm)
 {
-    const uint8_t reg = perm ? 0x01 : 0x00;
+    uint8_t reg = perm ? 0x01 : 0x00;
 
     if(hex < 0xA600)
         hex = 0xA600;
@@ -144,7 +153,6 @@ void setVoltageHex(uint16_t hex, bool perm)
             hex = 0xC000;
         if(hex > 0xE99A)
             hex = 0xE99A;
-        g_UserVoltage = 0x00;
     }
     else
         g_UserVoltage = hex;
@@ -162,20 +170,18 @@ void setVoltage(float u, bool perm)
     if(u > 60.0)
         u = 60.0;
 
-    uint16_t hex = u * 1020;
+    uint16_t hex = u * 1020.0;
     setVoltageHex(hex, perm);
 }
 
 void setCurrentHex(uint16_t hex, bool perm)
 {
-    const uint8_t reg = perm ? 0x04 : 0x03;
+    uint8_t reg = perm ? 0x04 : 0x03;
 
     if(hex > 0x0420)
         hex = 0x0420;
 
-    if(perm)
-        g_UserCurrent = 0x00;
-    else
+    if(!perm)
         g_UserCurrent = hex;
 
     setReg(reg, hex);
@@ -183,7 +189,7 @@ void setCurrentHex(uint16_t hex, bool perm)
 
 void setCurrent(float i, bool perm)
 {
-    uint16_t hex = i * 30;
+    uint16_t hex = i * 30.0;
 
     setCurrentHex(hex, perm);
 }

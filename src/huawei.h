@@ -60,6 +60,7 @@ void sendGetDescription();
 extern uint16_t g_UserVoltage;
 extern uint16_t g_UserCurrent;
 extern float g_Current;
+extern float g_CoulombCounter;
 
 extern HuaweiInfo g_PSU;
 

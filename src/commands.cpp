@@ -100,11 +100,11 @@ int CMD_debug(int argc, char **argv)
     return 0;
 }
 
-int CMD_info(int argc, char **argv)
+int CMD_status(int argc, char **argv)
 {
     Huawei::HuaweiInfo &info = Huawei::g_PSU;
 
-    Main::channel()->println("--- INFO ----");
+    Main::channel()->println("--- STATUS ----");
     Main::channel()->printf("Input Voltage: %.2f V ~ %.2f Hz\n", info.input_voltage, info.input_freq);
     Main::channel()->printf("Input Current: %.2f A\n", info.input_current);
     Main::channel()->printf("Input Power: %.2f W\n", info.input_power);
@@ -114,7 +114,8 @@ int CMD_info(int argc, char **argv)
     Main::channel()->printf("Output Current: %.2f A / %.2f A\n", info.output_current, info.output_current_max);
     Main::channel()->printf("Output Power: %.2f W\n", info.output_power);
     Main::channel()->printf("Output Temperature: %.2f °C\n", info.output_temp);
-    Main::channel()->println("--- INFO ----");
+    Main::channel()->printf("Coulomb Counter: %.2f Ah\n", Huawei::g_CoulombCounter / 3600.0);
+    Main::channel()->println("--- STATUS ----");
 
     return 0;
 }
@@ -218,7 +219,7 @@ CommandEntry g_Commands[] =
     {"help",        CMD_help,       " : Display list of commands"},
     {"voltage",     CMD_voltage,    " : voltage <volts> [perm]"},
     {"current",     CMD_current,    " : current <amps> [perm]"},
-    {"info",        CMD_info,       " : print current PSU data"},
+    {"status",      CMD_status,     " : print current PSU status/info"},
     {"description", CMD_description," : print internal PSU description"},
     {"debug",       CMD_debug,      " : debug <0|1>"},
     {"can",         CMD_can,        " : can <msgid> <hex> [rtr]"},
