@@ -55,6 +55,7 @@ void setCurrentHex(uint16_t hex, bool perm);
 void setCurrent(float i, bool perm);
 
 void sendGetData();
+void sendGetInfo();
 void sendGetDescription();
 
 extern uint16_t g_UserVoltage;

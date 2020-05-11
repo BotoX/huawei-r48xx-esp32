@@ -30,7 +30,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
 
         case HUAWEI_R48XX_MSG_DATA_ID: {
             uint16_t id = __builtin_bswap16(*(uint16_t *)&data[0]);
-            uint32_t val =  __builtin_bswap32(*(uint32_t *)&data[4]);
+            uint32_t val = __builtin_bswap32(*(uint32_t *)&data[4]);
             id &= ~0x3000;
 
             switch(id)
@@ -72,6 +72,19 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
             }
         } return;
 
+        case HUAWEI_R48XX_MSG_INFO_ID: {
+            if(data[1] == 1)
+                Main::channel()->println("--- HUAWEI R48XX INFO ---");
+
+            switch(data[1]) {
+                case 1: {
+                    uint32_t val = __builtin_bswap32(*(uint32_t *)&data[4]);
+                    uint16_t rated_current = ((val >> 16) & 0x03FF) >> 1;
+                    printf("Rated Current: %u\n", rated_current);
+                } return;
+            }
+        } break;
+
         case HUAWEI_R48XX_MSG_DESC_ID: {
             if(data[1] == 1)
                 Main::channel()->println("--- HUAWEI R48XX DESCRIPTION ---");
@@ -88,10 +101,10 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
     {
         if(Main::g_Debug[c])
         {
-            Main::channel(c)->printf("%X:", msgid);
+            Main::channel(c)->printf("%08X:", msgid);
             for(uint8_t i = 0; i < length; i++)
             {
-                Main::channel(c)->printf(" %X", data[i]);
+                Main::channel(c)->printf(" %02X", data[i]);
             }
             Main::channel(c)->println();
         }
@@ -178,8 +191,8 @@ void setCurrentHex(uint16_t hex, bool perm)
 {
     uint8_t reg = perm ? 0x04 : 0x03;
 
-    if(hex > 0x0420)
-        hex = 0x0420;
+    if(hex > 0x0499)
+        hex = 0x0499;
 
     if(!perm)
         g_UserCurrent = hex;
@@ -197,6 +210,13 @@ void setCurrent(float i, bool perm)
 void sendGetData()
 {
     HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_DATA_ID, 0x01, 0x3F, 0x00};
+    uint8_t data[8] = {0x00};
+    sendCAN(eaddr.pack(), data, sizeof(data));
+}
+
+void sendGetInfo()
+{
+    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_INFO_ID, 0x01, 0x3F, 0x00};
     uint8_t data[8] = {0x00};
     sendCAN(eaddr.pack(), data, sizeof(data));
 }

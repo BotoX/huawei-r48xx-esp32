@@ -120,6 +120,12 @@ int CMD_status(int argc, char **argv)
     return 0;
 }
 
+int CMD_info(int argc, char **argv)
+{
+    Huawei::sendGetInfo();
+    return 0;
+}
+
 int CMD_description(int argc, char **argv)
 {
     Huawei::sendGetDescription();
@@ -220,6 +226,7 @@ CommandEntry g_Commands[] =
     {"voltage",     CMD_voltage,    " : voltage <volts> [perm]"},
     {"current",     CMD_current,    " : current <amps> [perm]"},
     {"status",      CMD_status,     " : print current PSU status/info"},
+    {"info",        CMD_info,       " : print internal PSU information"},
     {"description", CMD_description," : print internal PSU description"},
     {"debug",       CMD_debug,      " : debug <0|1>"},
     {"can",         CMD_can,        " : can <msgid> <hex> [rtr]"},
